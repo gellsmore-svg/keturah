@@ -17,10 +17,12 @@ from keturah.manifest import (
     validate_capability,
     validate_manifest,
 )
+from keturah.registry import Registry
 
 __all__ = [
     "Capability",
     "Manifest",
+    "Registry",
     "CAPABILITY_KINDS",
     "MANIFEST_SCHEMA_VERSION",
     "CANONICAL_MANIFEST",
