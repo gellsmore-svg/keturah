@@ -36,6 +36,8 @@ A product typically exposes this as `capabilities()` and, where it is a service,
 
 ## Develop
 
+Works the same on native Linux and WSL — stdlib-only, no platform-specific steps.
+
 ```bash
 pip install -e ".[dev]" && pytest
 ```
