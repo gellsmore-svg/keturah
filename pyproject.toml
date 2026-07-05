@@ -23,6 +23,11 @@ classifiers = [
 # Dependency-free: the manifest shape is pure stdlib so any product can adopt it.
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/gellsmore-svg/keturah"
+Repository = "https://github.com/gellsmore-svg/keturah"
+Issues = "https://github.com/gellsmore-svg/keturah/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
