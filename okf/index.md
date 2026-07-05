@@ -17,6 +17,8 @@ manifest cannot drift from the code.
 
 ## Map
 
+- **[Concepts](concepts/index.md)** — the capability-manifest model.
+
 - **manifest** — `Capability`, `Manifest`, `build_manifest()` conventions.
 - Family adoption: every sibling exposes `<pkg>.manifest.build_manifest()`;
   Tirzah serves the federated registry at `/api/registry` and its own at
