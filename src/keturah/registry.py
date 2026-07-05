@@ -42,11 +42,26 @@ class Registry:
         return [(p, c) for p, c in self.capabilities() if tag in c.tags]
 
     def find(self, name: str, *, product: str | None = None) -> tuple[str, Capability] | None:
-        """First (product, capability) matching ``name`` (optionally within a product)."""
+        """(product, capability) for ``name``.
+
+        Accepts the namespaced form ``product.tool`` (the same names to_mcp()
+        emits), which disambiguates when several products expose the same tool
+        name. An unqualified name returns the first match in registration
+        order — use ``find_all`` when you need every match.
+        """
+        if product is None and "." in name:
+            candidate_product, _, candidate_name = name.partition(".")
+            if candidate_product in self.products():
+                product, name = candidate_product, candidate_name
         for prod, cap in self.capabilities():
             if cap.name == name and (product is None or prod == product):
                 return (prod, cap)
         return None
+
+    def find_all(self, name: str) -> list[tuple[str, Capability]]:
+        """Every (product, capability) whose name matches — the disambiguation
+        surface for names shared across products."""
+        return [(p, c) for p, c in self.capabilities() if c.name == name]
 
     def to_dict(self) -> dict[str, Any]:
         return {"products": self.products(), "manifests": [m.to_dict() for m in self._manifests]}

@@ -47,3 +47,13 @@ def test_empty_registry():
     assert reg.products() == [] and reg.to_mcp()["tools"] == []
     reg.add(_milcah())
     assert reg.products() == ["milcah"]
+
+
+def test_find_accepts_namespaced_names_and_find_all():
+    reg = Registry([
+        manifest("tirzah", capabilities=[capability("coherence_check", "d")]),
+        manifest("milcah", capabilities=[capability("coherence_check", "d")]),
+    ])
+    prod, _ = reg.find("milcah.coherence_check")
+    assert prod == "milcah"
+    assert [p for p, _ in reg.find_all("coherence_check")] == ["tirzah", "milcah"]

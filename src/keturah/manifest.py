@@ -23,6 +23,10 @@ CAPABILITY_KINDS = frozenset({"tool", "resource", "prompt"})
 
 _EMPTY_OBJECT_SCHEMA: dict[str, Any] = {"type": "object"}
 
+import re as _re
+
+_MCP_NAME = _re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+
 
 @dataclass
 class Capability:
@@ -39,12 +43,16 @@ class Capability:
         return asdict(self)
 
     def to_mcp_tool(self) -> dict[str, Any]:
-        """This capability as an MCP ``tools/list`` entry."""
-        return {
+        """This capability as an MCP ``tools/list`` entry (outputSchema included
+        when declared — family products define rich result shapes)."""
+        tool = {
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema or _EMPTY_OBJECT_SCHEMA,
         }
+        if self.output_schema:
+            tool["outputSchema"] = self.output_schema
+        return tool
 
 
 @dataclass
@@ -68,6 +76,16 @@ class Manifest:
 
     def names(self) -> list[str]:
         return [c.name for c in self.capabilities]
+
+    def resources(self) -> list[Capability]:
+        """Readable interfaces (kind="resource") — not projected by to_mcp()."""
+        return [c for c in self.capabilities if c.kind == "resource"]
+
+    def prompts(self) -> list[Capability]:
+        """Prompt templates (kind="prompt") — not projected by to_mcp(); a real
+        MCP server would surface these via prompts/list, which is out of scope
+        for this thin manifest (documented, not silently dropped)."""
+        return [c for c in self.capabilities if c.kind == "prompt"]
 
 
 def capability(
@@ -105,9 +123,27 @@ def validate_capability(cap: Any, *, index: int = 0) -> list[str]:
         errors.append(f"capability[{index}] ({data.get('name', '?')}) missing description")
     if data.get("kind") not in CAPABILITY_KINDS:
         errors.append(f"capability[{index}] invalid kind: {data.get('kind')!r} (allowed: {sorted(CAPABILITY_KINDS)})")
+    name = data.get("name")
+    if name and data.get("kind", "tool") == "tool" and not _MCP_NAME.match(str(name)):
+        errors.append(
+            f"capability[{index}] tool name {name!r} is not MCP-safe "
+            "(letters, digits, _ - . only; max 128 chars)"
+        )
+    tags = data.get("tags")
+    if tags is not None and (
+        not isinstance(tags, list) or any(not isinstance(t, str) for t in tags)
+    ):
+        errors.append(f"capability[{index}] tags must be a list of strings")
     for schema_field in ("input_schema", "output_schema"):
         if schema_field in data and not isinstance(data[schema_field], dict):
             errors.append(f"capability[{index}] {schema_field} must be a JSON-Schema object")
+        elif isinstance(data.get(schema_field), dict) and data[schema_field]:
+            schema = data[schema_field]
+            if not any(key in schema for key in ("type", "$ref", "properties", "oneOf", "anyOf", "allOf", "enum")):
+                errors.append(
+                    f"capability[{index}] {schema_field} does not look like JSON Schema "
+                    "(expected one of: type/$ref/properties/oneOf/anyOf/allOf/enum)"
+                )
     return errors
 
 
@@ -119,6 +155,14 @@ def validate_manifest(man: Any) -> list[str]:
     errors = []
     if not data.get("product"):
         errors.append("manifest missing product")
+    schema_version = data.get("schema_version")
+    if not schema_version:
+        errors.append("manifest missing schema_version")
+    elif str(schema_version) != MANIFEST_SCHEMA_VERSION:
+        errors.append(
+            f"unknown manifest schema_version: {schema_version!r} "
+            f"(this keturah speaks {MANIFEST_SCHEMA_VERSION})"
+        )
     caps = data.get("capabilities")
     if not isinstance(caps, list):
         errors.append("manifest capabilities must be a list")

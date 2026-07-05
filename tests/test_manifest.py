@@ -1,4 +1,5 @@
 from keturah import (
+    validate_capability,
     CANONICAL_MANIFEST,
     Capability,
     Manifest,
@@ -60,3 +61,40 @@ def test_validation_catches_problems():
     assert any("missing name" in e for e in errors)
     assert any("invalid kind" in e for e in errors)
     assert any("duplicate capability name: dup" in e for e in errors)
+
+
+def test_output_schema_projects_to_mcp():
+    cap = capability("t", "d", output_schema={"type": "object", "properties": {"ok": {"type": "boolean"}}})
+    tool = cap.to_mcp_tool()
+    assert tool["outputSchema"]["properties"]["ok"]["type"] == "boolean"
+    assert "outputSchema" not in capability("t2", "d").to_mcp_tool()
+
+
+def test_schema_version_is_validated():
+    man = manifest("p", capabilities=[capability("t", "d")]).to_dict()
+    assert validate_manifest(man) == []
+    man["schema_version"] = "9.9"
+    assert any("schema_version" in e for e in validate_manifest(man))
+    del man["schema_version"]
+    assert any("missing schema_version" in e for e in validate_manifest(man))
+
+
+def test_capability_validation_strictness():
+    bad_name = capability("has spaces!", "d").to_dict()
+    assert any("MCP-safe" in e for e in validate_capability(bad_name))
+    bad_tags = capability("t", "d", tags=["ok"]).to_dict()
+    bad_tags["tags"] = ["ok", 3]
+    assert any("tags" in e for e in validate_capability(bad_tags))
+    junk_schema = capability("t", "d", input_schema={"whatever": 1}).to_dict()
+    assert any("JSON Schema" in e for e in validate_capability(junk_schema))
+
+
+def test_prompt_and_resource_accessors():
+    man = manifest("p", capabilities=[
+        capability("t", "d"),
+        capability("r", "d", kind="resource"),
+        capability("pr", "d", kind="prompt"),
+    ])
+    assert [c.name for c in man.resources()] == ["r"]
+    assert [c.name for c in man.prompts()] == ["pr"]
+    assert [t["name"] for t in man.to_mcp()["tools"]] == ["t"]
