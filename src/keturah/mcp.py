@@ -196,6 +196,15 @@ def main(argv: list[str] | None = None) -> None:
 
             reg = family_registry()
 
+            # Tirzah's own MCP handlers (the "memory in" seam: search_memory, …).
+            # Defensive by construction — no live DB needed to register.
+            try:
+                from tirzah.mcp_handlers import build_handlers as _tirzah_handlers
+
+                handlers.update(_tirzah_handlers())
+            except Exception:
+                pass  # tirzah memory handlers not available
+
             # Try to provide real(ish) handlers for tools that can be called safely
             # Note: full "tirzah.ask" needs a configured Tirzah runtime + DB.
             # We wire the ones that are importable with minimal state.
