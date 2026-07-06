@@ -18,6 +18,7 @@ from keturah.manifest import (
     validate_manifest,
 )
 from keturah.registry import Registry
+from keturah.mcp import run_stdio_server
 
 __all__ = [
     "Capability",
@@ -30,4 +31,5 @@ __all__ = [
     "manifest",
     "validate_capability",
     "validate_manifest",
+    "run_stdio_server",
 ]

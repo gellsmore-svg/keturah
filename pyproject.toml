@@ -31,6 +31,9 @@ Issues = "https://github.com/gellsmore-svg/keturah/issues"
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
+[project.scripts]
+keturah-mcp = "keturah.mcp:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
