@@ -14,6 +14,7 @@ manifest and the enforced contract never drift.
 
 from __future__ import annotations
 
+import re as _re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -22,8 +23,6 @@ MANIFEST_SCHEMA_VERSION = "1.0"
 CAPABILITY_KINDS = frozenset({"tool", "resource", "prompt"})
 
 _EMPTY_OBJECT_SCHEMA: dict[str, Any] = {"type": "object"}
-
-import re as _re
 
 _MCP_NAME = _re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
