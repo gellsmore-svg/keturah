@@ -71,6 +71,28 @@ def test_tools_list_from_registry(monkeypatch):
     assert any(t["name"] == "demo.echo" for t in tools)
 
 
+def test_tools_list_hides_tools_without_handlers():
+    reg = Registry([
+        manifest(
+            "demo",
+            capabilities=[
+                capability("echo", "Return the message"),
+                capability("planned", "Declared but not executable yet"),
+            ],
+        )
+    ])
+
+    responses = _capture_stdio(
+        lambda: run_stdio_server(reg, handlers={"demo.echo": lambda **k: k}),
+        [
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+        ],
+    )
+
+    tools = responses[-1]["result"]["tools"]
+    assert [tool["name"] for tool in tools] == ["demo.echo"]
+
+
 def test_tool_call_executes_handler():
     reg = _make_demo_manifest()
 

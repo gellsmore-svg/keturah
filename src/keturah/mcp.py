@@ -47,6 +47,16 @@ def _error_response(req_id: Any, code: int, message: str) -> dict[str, Any]:
     }
 
 
+def _callable_tools_result(result: dict[str, Any], handlers: Mapping[str, Callable[..., Any]]) -> dict[str, Any]:
+    """Restrict MCP tools/list to tools this server can actually execute."""
+    handler_names = set(handlers)
+    tools = [
+        tool for tool in result.get("tools", [])
+        if isinstance(tool, dict) and tool.get("name") in handler_names
+    ]
+    return {**result, "tools": tools}
+
+
 def run_stdio_server(
     registry: Registry,
     *,
@@ -115,7 +125,7 @@ def run_stdio_server(
 
         if method == "tools/list":
             # Always return the current view from the registry
-            result = registry.to_mcp(namespaced=True)
+            result = _callable_tools_result(registry.to_mcp(namespaced=True), handlers)
             _write_json({"jsonrpc": "2.0", "id": req_id, "result": result})
             continue
 
