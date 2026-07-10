@@ -79,7 +79,6 @@ def run_stdio_server(
     local stdio MCP clients. For production use, wrap in a small process manager.
     """
     handlers = dict(handlers or {})
-    initialized = False
 
     for raw_line in sys.stdin:
         line = raw_line.strip()
@@ -100,8 +99,6 @@ def run_stdio_server(
 
         # Notifications (no id) are fire-and-forget
         if req_id is None:
-            if method == "notifications/initialized":
-                initialized = True
             continue
 
         if method == "initialize":
@@ -245,12 +242,12 @@ def main(argv: list[str] | None = None) -> None:
                     return {
                         "labels": [
                             {
-                                "term": getattr(l, "term", ""),
-                                "mpl_label": getattr(l, "mpl_label", ""),
-                                "canonical_term": getattr(l, "canonical_term", ""),
-                                "match_kind": getattr(l, "match_kind", ""),
+                                "term": getattr(label, "term", ""),
+                                "mpl_label": getattr(label, "mpl_label", ""),
+                                "canonical_term": getattr(label, "canonical_term", ""),
+                                "match_kind": getattr(label, "match_kind", ""),
                             }
-                            for l in labels
+                            for label in labels
                         ]
                     }
 

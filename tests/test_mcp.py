@@ -7,8 +7,6 @@ import json
 import sys
 from typing import Any
 
-import pytest
-
 from keturah import Registry, capability, manifest, run_stdio_server
 
 
