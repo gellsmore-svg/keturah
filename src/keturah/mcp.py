@@ -215,6 +215,14 @@ def main(argv: list[str] | None = None) -> None:
             except Exception:
                 pass  # tirzah memory handlers not available
 
+            # Hanani's reasoning-slice handlers (ingest_and_assess, corpus_summary).
+            try:
+                from hanani.mcp_handlers import build_handlers as _hanani_handlers
+
+                handlers.update(_hanani_handlers())
+            except Exception:
+                pass  # hanani handlers not available
+
             # Try to provide real(ish) handlers for tools that can be called safely
             # Note: full "tirzah.ask" needs a configured Tirzah runtime + DB.
             # We wire the ones that are importable with minimal state.
