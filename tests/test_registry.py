@@ -35,13 +35,13 @@ def test_registry_federates_resources_and_prompts():
     """Registry mirrors Manifest.resources()/prompts() across products (#13)."""
     reg = Registry([
         _tirzah(),
-        manifest("cairn", capabilities=[
+        manifest("deborah", capabilities=[
             capability("spec", "the process spec", kind="resource"),
             capability("review", "review prompt", kind="prompt"),
         ]),
     ])
-    assert [(p, c.name) for p, c in reg.resources()] == [("tirzah", "docs"), ("cairn", "spec")]
-    assert [(p, c.name) for p, c in reg.prompts()] == [("cairn", "review")]
+    assert [(p, c.name) for p, c in reg.resources()] == [("tirzah", "docs"), ("deborah", "spec")]
+    assert [(p, c.name) for p, c in reg.prompts()] == [("deborah", "review")]
     # resources/prompts stay out of the MCP tools projection
     assert "spec" not in [t["name"] for t in reg.to_mcp(namespaced=False)["tools"]]
 

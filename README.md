@@ -13,7 +13,7 @@ Keturah does not replace it. `Manifest.to_mcp()` projects a manifest onto MCP's
 `tools/list` shape, so a real MCP server is a thin adapter over a Keturah manifest
 rather than a parallel definition. Keturah exists because the family is a mix of
 libraries and services, and because manifests should be **built from the seam
-contracts a product already enforces** (Cairn's plan schema, Milcah's
+contracts a product already enforces** (Deborah's plan schema, Milcah's
 specialist request/result, Mahalath's match, Galeed's events) so the manifest and
 the contract never drift.
 

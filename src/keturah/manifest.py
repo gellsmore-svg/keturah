@@ -8,7 +8,7 @@ manifest onto Model Context Protocol's ``tools/list`` shape, so a real MCP serve
 a thin adapter rather than a parallel definition.
 
 The intent is that products build their manifest *from the seam contracts they
-already have* (e.g. Cairn's plan schema, Milcah's specialist request/result), so the
+already have* (e.g. Deborah's plan schema, Milcah's specialist request/result), so the
 manifest and the enforced contract never drift.
 """
 
