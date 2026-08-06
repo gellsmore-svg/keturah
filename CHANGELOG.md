@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- **New `keturah.envelope`** — the shared capability-call contract
+  (`SpecialistRequest`, `SpecialistResult`, `SPECIALIST_MODES`,
+  `TERMINAL_REASONS`, validators). Extracted from two hand-maintained copies
+  (`tirzah.coherence`, `milcah.contract`) that had already drifted: only the
+  consumer carried `error`/`error_type`, so a provider could not represent its
+  own failure. Both now import one definition.
+- **New `Evidence` type** (`kind`/`ref`/`note`) plus `normalise_evidence()`.
+  Evidence was `list[str]`, so "evidence-backed" could be asserted but never
+  checked. `SpecialistResult.is_anchored` distinguishes evidence that points at
+  something from prose. Bare strings still work — they upgrade to `kind="note"`,
+  so no producer has to change first.
 - `Registry.find_all()` now parses namespaced `product.tool` names the same way
   `find()` does — `find_all("milcah.coherence_check")` returned `[]` before (#10).
   It also takes the `product=` keyword for symmetry with `find()`.

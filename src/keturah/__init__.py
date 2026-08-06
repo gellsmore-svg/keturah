@@ -17,10 +17,36 @@ from keturah.manifest import (
     validate_capability,
     validate_manifest,
 )
+from keturah.envelope import (
+    ENVELOPE_VERSION,
+    EVIDENCE_KINDS,
+    REQUEST_FIELDS,
+    RESULT_FIELDS,
+    SPECIALIST_MODES,
+    TERMINAL_REASONS,
+    Evidence,
+    SpecialistRequest,
+    SpecialistResult,
+    normalise_evidence,
+    validate_request,
+    validate_result,
+)
 from keturah.registry import Registry
 from keturah.mcp import run_stdio_server
 
 __all__ = [
+    "validate_result",
+    "validate_request",
+    "normalise_evidence",
+    "SpecialistResult",
+    "SpecialistRequest",
+    "Evidence",
+    "TERMINAL_REASONS",
+    "SPECIALIST_MODES",
+    "RESULT_FIELDS",
+    "REQUEST_FIELDS",
+    "EVIDENCE_KINDS",
+    "ENVELOPE_VERSION",
     "Capability",
     "Manifest",
     "Registry",
