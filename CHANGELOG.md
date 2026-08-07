@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Layered confidence in `keturah.envelope`**, adopted from `deborah.contracts`
+  so the estate has one vocabulary: three dimensions (`evidence`, `inference`,
+  `execution`) with ordinal bands (`high`/`medium`/`low`/`unassessed`).
+  `SpecialistResult.confidence_bands` carries the decomposition;
+  `confidence_layered()` derives it from the legacy scalar when unset. The
+  scalar is **never** back-computed from bands — that would manufacture the
+  precision the model exists to avoid. `band_for()` matches
+  `milcah.deborah.confidence_band` exactly, verified by test.
 - **New `keturah.envelope`** — the shared capability-call contract
   (`SpecialistRequest`, `SpecialistResult`, `SPECIALIST_MODES`,
   `TERMINAL_REASONS`, validators). Extracted from two hand-maintained copies

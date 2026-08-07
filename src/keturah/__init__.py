@@ -18,15 +18,20 @@ from keturah.manifest import (
     validate_manifest,
 )
 from keturah.envelope import (
+    CONFIDENCE_BANDS,
+    CONFIDENCE_DIMENSIONS,
     ENVELOPE_VERSION,
     EVIDENCE_KINDS,
     REQUEST_FIELDS,
     RESULT_FIELDS,
     SPECIALIST_MODES,
     TERMINAL_REASONS,
+    Confidence,
     Evidence,
     SpecialistRequest,
     SpecialistResult,
+    band_for,
+    normalise_confidence,
     normalise_evidence,
     validate_request,
     validate_result,
@@ -35,6 +40,11 @@ from keturah.registry import Registry
 from keturah.mcp import run_stdio_server
 
 __all__ = [
+    "normalise_confidence",
+    "band_for",
+    "Confidence",
+    "CONFIDENCE_DIMENSIONS",
+    "CONFIDENCE_BANDS",
     "validate_result",
     "validate_request",
     "normalise_evidence",

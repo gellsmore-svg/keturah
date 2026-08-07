@@ -38,6 +38,34 @@ TERMINAL_REASONS = frozenset(
     {"converged", "max_iterations", "no_objections", "insufficient_evidence", "blocked"}
 )
 
+# Layered confidence. Adopted from ``deborah.contracts`` so the estate has one
+# vocabulary: three dimensions, ordinal bands, no false numeric precision. A
+# scalar summary may still be derived (``SpecialistResult.confidence``) but must
+# not erase the decomposition — "confident in *what*?" is the question a single
+# number cannot answer, and Experiment 1A showed why: a specialist returned
+# 0.143 across five runs whose outputs differed every time, because that number
+# measures graph structure, not the reliability of the answer.
+CONFIDENCE_BANDS: frozenset[str] = frozenset({"high", "medium", "low", "unassessed"})
+CONFIDENCE_DIMENSIONS: tuple[str, ...] = ("evidence", "inference", "execution")
+
+# Float -> band thresholds. Identical to ``milcah.deborah.confidence_band`` on
+# purpose: two different mappings would make the same result read differently
+# depending on which product converted it.
+_BAND_THRESHOLDS: tuple[tuple[float, str], ...] = ((0.7, "high"), (0.4, "medium"))
+
+
+def band_for(value: Any) -> str:
+    """Map a scalar confidence in [0, 1] onto an ordinal band."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "unassessed"
+    for threshold, band in _BAND_THRESHOLDS:
+        if v >= threshold:
+            return band
+    return "low" if v > 0 else "unassessed"
+
+
 # What a piece of evidence *is*. Deliberately small: enough to check that a
 # claim points at something, not an attempt to model epistemology.
 EVIDENCE_KINDS = frozenset(
@@ -65,6 +93,52 @@ RESULT_FIELDS: tuple[str, ...] = (
     "error",
     "error_type",
 )
+
+
+@dataclass
+class Confidence:
+    """Confidence decomposed by what is being asserted.
+
+    ``evidence``  — how good the supporting observations are.
+    ``inference`` — how sound the step from evidence to claim is.
+    ``execution`` — how reliably the capability itself ran.
+
+    A result can be well-evidenced and badly reasoned, or soundly reasoned from
+    thin evidence; one number cannot say which. Unset dimensions are
+    ``unassessed`` rather than a default value — not knowing is a distinct state
+    from knowing it is low.
+    """
+
+    evidence: str = "unassessed"
+    inference: str = "unassessed"
+    execution: str = "unassessed"
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+    @property
+    def is_assessed(self) -> bool:
+        return any(getattr(self, d) != "unassessed" for d in CONFIDENCE_DIMENSIONS)
+
+
+def normalise_confidence(value: Any) -> Confidence:
+    """Coerce a float, dict, or Confidence into the layered form.
+
+    A bare float is the legacy shape: it becomes the same band on every
+    dimension, which is honest — a single number genuinely carries no
+    information about *which* dimension it describes. An unknown band degrades
+    to ``unassessed`` rather than raising.
+    """
+    if isinstance(value, Confidence):
+        return value
+    if isinstance(value, dict):
+        bands = {}
+        for dim in CONFIDENCE_DIMENSIONS:
+            band = str(value.get(dim, "unassessed")).strip().lower()
+            bands[dim] = band if band in CONFIDENCE_BANDS else "unassessed"
+        return Confidence(**bands)
+    band = band_for(value)
+    return Confidence(evidence=band, inference=band, execution=band)
 
 
 @dataclass
@@ -148,7 +222,8 @@ class SpecialistResult:
     objections: list[str] = field(default_factory=list)
     evidence: list[Any] = field(default_factory=list)  # str | dict | Evidence
     citations: list[str] = field(default_factory=list)
-    confidence: float = 0.0
+    confidence: float = 0.0  # scalar summary, retained for existing callers
+    confidence_bands: Any = None  # Confidence | dict | None — the decomposition
     terminal_reason: str = "converged"
     trace_metadata: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
@@ -160,6 +235,18 @@ class SpecialistResult:
     def evidence_items(self) -> list[Evidence]:
         """The evidence as typed items, whatever shape the producer used."""
         return normalise_evidence(self.evidence)
+
+    def confidence_layered(self) -> Confidence:
+        """Confidence by dimension, derived from the scalar when unset.
+
+        Producers that only set the float still get a usable decomposition;
+        producers that set bands keep them. The scalar is never inferred back
+        from bands — deriving a number from ordinals would manufacture the
+        precision this model exists to avoid.
+        """
+        if self.confidence_bands is not None:
+            return normalise_confidence(self.confidence_bands)
+        return normalise_confidence(self.confidence)
 
     @property
     def is_anchored(self) -> bool:
@@ -199,6 +286,15 @@ def validate_result(result: Any) -> list[str]:
         isinstance(confidence, (int, float)) and 0.0 <= float(confidence) <= 1.0
     ):
         errors.append("confidence must be a number in [0, 1]")
+    bands = data.get("confidence_bands")
+    if isinstance(bands, dict):
+        for dim, band in bands.items():
+            if dim not in CONFIDENCE_DIMENSIONS:
+                errors.append(f"unknown confidence dimension: {dim!r}")
+            elif str(band).strip().lower() not in CONFIDENCE_BANDS:
+                errors.append(
+                    f"confidence_bands.{dim} must be one of {sorted(CONFIDENCE_BANDS)}, got {band!r}"
+                )
     reason = data.get("terminal_reason")
     if reason is not None and reason not in TERMINAL_REASONS:
         errors.append(
