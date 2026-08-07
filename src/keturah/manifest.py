@@ -22,6 +22,10 @@ MANIFEST_SCHEMA_VERSION = "1.0"
 # An interface is callable (tool), readable (resource), or a prompt template (prompt).
 CAPABILITY_KINDS = frozenset({"tool", "resource", "prompt"})
 
+# Optional Stage-0 contract extensions (all additive; omitted ≡ default/empty).
+BUDGET_CLASSES = frozenset({"free", "low", "medium", "high", "unbounded"})
+CONFIDENCE_MODES = frozenset({"calibrated", "heuristic", "none"})
+
 _EMPTY_OBJECT_SCHEMA: dict[str, Any] = {"type": "object"}
 
 _MCP_NAME = _re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
@@ -29,7 +33,13 @@ _MCP_NAME = _re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 @dataclass
 class Capability:
-    """One LLM-consumable interface."""
+    """One LLM-consumable interface.
+
+    Core fields (name/description/kind/schemas/tags) are the MCP-facing surface.
+    Optional Stage-0 fields describe *how* a caller may engage the capability —
+    they round-trip via :meth:`to_dict` and ride in MCP ``_meta.keturah`` so
+    existing tools/list consumers stay valid.
+    """
 
     name: str
     description: str
@@ -37,20 +47,53 @@ class Capability:
     input_schema: dict[str, Any] = field(default_factory=dict)  # JSON Schema
     output_schema: dict[str, Any] = field(default_factory=dict)  # JSON Schema
     tags: list[str] = field(default_factory=list)
+    # Stage 0 — optional contract extensions (architecture IMPLEMENTATION_ROADMAP)
+    negotiable: bool = False
+    semantics: dict[str, Any] = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
+    cost: dict[str, Any] = field(default_factory=dict)
+    failure_modes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        # Omit empty optionals so legacy-shaped serialisations stay compact.
+        if not data.get("negotiable"):
+            data.pop("negotiable", None)
+        for key in ("semantics", "evidence", "cost"):
+            if not data.get(key):
+                data.pop(key, None)
+        if not data.get("failure_modes"):
+            data.pop("failure_modes", None)
+        return data
+
+    def keturah_meta(self) -> dict[str, Any]:
+        """Non-MCP contract fields for ``_meta.keturah`` / estate tooling."""
+        meta: dict[str, Any] = {}
+        if self.negotiable:
+            meta["negotiable"] = True
+        if self.semantics:
+            meta["semantics"] = dict(self.semantics)
+        if self.evidence:
+            meta["evidence"] = dict(self.evidence)
+        if self.cost:
+            meta["cost"] = dict(self.cost)
+        if self.failure_modes:
+            meta["failure_modes"] = list(self.failure_modes)
+        return meta
 
     def to_mcp_tool(self) -> dict[str, Any]:
         """This capability as an MCP ``tools/list`` entry (outputSchema included
         when declared — family products define rich result shapes)."""
-        tool = {
+        tool: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema or _EMPTY_OBJECT_SCHEMA,
         }
         if self.output_schema:
             tool["outputSchema"] = self.output_schema
+        meta = self.keturah_meta()
+        if meta:
+            tool["_meta"] = {"keturah": meta}
         return tool
 
 
@@ -95,8 +138,13 @@ def capability(
     input_schema: dict[str, Any] | None = None,
     output_schema: dict[str, Any] | None = None,
     tags: list[str] | None = None,
+    negotiable: bool = False,
+    semantics: dict[str, Any] | None = None,
+    evidence: dict[str, Any] | None = None,
+    cost: dict[str, Any] | None = None,
+    failure_modes: list[str] | None = None,
 ) -> Capability:
-    """Convenience builder."""
+    """Convenience builder. Stage-0 fields are optional and default empty/false."""
     return Capability(
         name=name,
         description=description,
@@ -104,6 +152,11 @@ def capability(
         input_schema=input_schema or {},
         output_schema=output_schema or {},
         tags=tags or [],
+        negotiable=bool(negotiable),
+        semantics=dict(semantics or {}),
+        evidence=dict(evidence or {}),
+        cost=dict(cost or {}),
+        failure_modes=list(failure_modes or []),
     )
 
 
@@ -143,6 +196,34 @@ def validate_capability(cap: Any, *, index: int = 0) -> list[str]:
                     f"capability[{index}] {schema_field} does not look like JSON Schema "
                     "(expected one of: type/$ref/properties/oneOf/anyOf/allOf/enum)"
                 )
+    # Stage-0 optional fields — validate shape only when present.
+    if "negotiable" in data and data["negotiable"] is not None:
+        if not isinstance(data["negotiable"], bool):
+            errors.append(f"capability[{index}] negotiable must be a boolean")
+    for obj_field in ("semantics", "evidence", "cost"):
+        if obj_field in data and data[obj_field] is not None:
+            if not isinstance(data[obj_field], dict):
+                errors.append(f"capability[{index}] {obj_field} must be an object")
+    cost = data.get("cost")
+    if isinstance(cost, dict) and "budget_class" in cost:
+        bc = cost.get("budget_class")
+        if bc is not None and str(bc) not in BUDGET_CLASSES:
+            errors.append(
+                f"capability[{index}] cost.budget_class must be one of "
+                f"{sorted(BUDGET_CLASSES)}, got {bc!r}"
+            )
+    evidence = data.get("evidence")
+    if isinstance(evidence, dict) and "confidence" in evidence:
+        conf = evidence.get("confidence")
+        if conf is not None and str(conf) not in CONFIDENCE_MODES:
+            errors.append(
+                f"capability[{index}] evidence.confidence must be one of "
+                f"{sorted(CONFIDENCE_MODES)}, got {conf!r}"
+            )
+    modes = data.get("failure_modes")
+    if modes is not None:
+        if not isinstance(modes, list) or any(not isinstance(m, str) for m in modes):
+            errors.append(f"capability[{index}] failure_modes must be a list of strings")
     return errors
 
 

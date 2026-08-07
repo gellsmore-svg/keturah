@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keturah"
-version = "0.3.0"
+version = "0.4.0"
 description = "Keturah — a uniform, MCP-bridgeable manifest of a product's LLM-consumable interfaces."
 readme = "README.md"
 requires-python = ">=3.11"

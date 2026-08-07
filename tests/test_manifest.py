@@ -98,3 +98,53 @@ def test_prompt_and_resource_accessors():
     assert [c.name for c in man.resources()] == ["r"]
     assert [c.name for c in man.prompts()] == ["pr"]
     assert [t["name"] for t in man.to_mcp()["tools"]] == ["t"]
+
+
+def test_stage0_optional_fields_roundtrip_and_mcp_meta():
+    """Stage 0: negotiable/semantics/evidence/cost/failure_modes — additive."""
+    cap = capability(
+        "critique",
+        "Pressure-test a claim.",
+        negotiable=True,
+        semantics={
+            "purpose": "Find unsupported inferences.",
+            "can": ["detect-contradiction"],
+            "cannot": ["establish-ground-truth"],
+        },
+        evidence={"provides": ["counterexample"], "confidence": "heuristic"},
+        cost={"model_calls": "1..3", "budget_class": "medium"},
+        failure_modes=["underspecified-claim", "domain-out-of-scope"],
+    )
+    assert validate_capability(cap) == []
+    data = cap.to_dict()
+    assert data["negotiable"] is True
+    assert data["cost"]["budget_class"] == "medium"
+    assert "underspecified-claim" in data["failure_modes"]
+
+    tool = cap.to_mcp_tool()
+    assert tool["name"] == "critique"
+    assert tool["_meta"]["keturah"]["negotiable"] is True
+    assert tool["_meta"]["keturah"]["failure_modes"] == [
+        "underspecified-claim",
+        "domain-out-of-scope",
+    ]
+
+    # Legacy bare capability still validates and omits empty Stage-0 keys.
+    bare = capability("ask", "Answer.").to_dict()
+    assert "negotiable" not in bare
+    assert "cost" not in bare
+    assert validate_capability(bare) == []
+    assert "_meta" not in capability("ask", "Answer.").to_mcp_tool()
+
+
+def test_stage0_validation_rejects_bad_shapes():
+    bad = capability("t", "d").to_dict()
+    bad["negotiable"] = "yes"
+    assert any("negotiable" in e for e in validate_capability(bad))
+    bad2 = capability("t", "d", cost={"budget_class": "ultra"}).to_dict()
+    assert any("budget_class" in e for e in validate_capability(bad2))
+    bad3 = capability("t", "d", evidence={"confidence": "vibes"}).to_dict()
+    assert any("evidence.confidence" in e for e in validate_capability(bad3))
+    bad4 = capability("t", "d").to_dict()
+    bad4["failure_modes"] = [1]
+    assert any("failure_modes" in e for e in validate_capability(bad4))

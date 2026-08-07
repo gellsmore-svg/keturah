@@ -7,8 +7,10 @@ contracts a product already enforces, so the manifest never drifts from reality.
 """
 
 from keturah.manifest import (
+    BUDGET_CLASSES,
     CANONICAL_MANIFEST,
     CAPABILITY_KINDS,
+    CONFIDENCE_MODES,
     MANIFEST_SCHEMA_VERSION,
     Capability,
     Manifest,
@@ -60,7 +62,9 @@ __all__ = [
     "Capability",
     "Manifest",
     "Registry",
+    "BUDGET_CLASSES",
     "CAPABILITY_KINDS",
+    "CONFIDENCE_MODES",
     "MANIFEST_SCHEMA_VERSION",
     "CANONICAL_MANIFEST",
     "capability",

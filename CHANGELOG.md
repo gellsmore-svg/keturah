@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.4.0] — 2026-08-07
+
+### Added
+- Stage 0 contract extensions on `Capability` (all optional, additive):
+  `negotiable`, `semantics`, `evidence`, `cost`, `failure_modes`
+- MCP tools carry these under `_meta.keturah` when present (round-trip safe)
+- `BUDGET_CLASSES` / `CONFIDENCE_MODES` vocabularies for validation
 - **Layered confidence in `keturah.envelope`**, adopted from `deborah.contracts`
   so the estate has one vocabulary: three dimensions (`evidence`, `inference`,
   `execution`) with ordinal bands (`high`/`medium`/`low`/`unassessed`).
