@@ -28,7 +28,10 @@ CONFIDENCE_MODES = frozenset({"calibrated", "heuristic", "none"})
 
 _EMPTY_OBJECT_SCHEMA: dict[str, Any] = {"type": "object"}
 
-_MCP_NAME = _re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+# Capability names must be MCP-safe and must not contain ``.`` — that character
+# is the Registry's product.tool separator (review H2). Namespaced MCP tool
+# names (``product.tool``) are formed at projection time, not stored here.
+_MCP_NAME = _re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 @dataclass
@@ -144,7 +147,40 @@ def capability(
     cost: dict[str, Any] | None = None,
     failure_modes: list[str] | None = None,
 ) -> Capability:
-    """Convenience builder. Stage-0 fields are optional and default empty/false."""
+    """Convenience builder. Stage-0 fields are optional and default empty/false.
+
+    Wrong types raise :class:`TypeError` naming the field (review M3) rather
+    than coercing silently — ``bool("yes")`` / ``list("times out")`` would
+    otherwise accept values the vocabulary rejects only by accident.
+    """
+    if not isinstance(negotiable, bool):
+        raise TypeError(f"negotiable must be a bool, got {type(negotiable).__name__}")
+    if semantics is not None and not isinstance(semantics, dict):
+        raise TypeError(f"semantics must be a dict, got {type(semantics).__name__}")
+    if evidence is not None and not isinstance(evidence, dict):
+        raise TypeError(f"evidence must be a dict, got {type(evidence).__name__}")
+    if cost is not None and not isinstance(cost, dict):
+        raise TypeError(f"cost must be a dict, got {type(cost).__name__}")
+    if failure_modes is not None:
+        if not isinstance(failure_modes, list) or any(
+            not isinstance(m, str) for m in failure_modes
+        ):
+            raise TypeError(
+                "failure_modes must be a list of strings, "
+                f"got {type(failure_modes).__name__}"
+            )
+    if input_schema is not None and not isinstance(input_schema, dict):
+        raise TypeError(
+            f"input_schema must be a dict, got {type(input_schema).__name__}"
+        )
+    if output_schema is not None and not isinstance(output_schema, dict):
+        raise TypeError(
+            f"output_schema must be a dict, got {type(output_schema).__name__}"
+        )
+    if tags is not None and (
+        not isinstance(tags, list) or any(not isinstance(t, str) for t in tags)
+    ):
+        raise TypeError("tags must be a list of strings")
     return Capability(
         name=name,
         description=description,
@@ -152,7 +188,7 @@ def capability(
         input_schema=input_schema or {},
         output_schema=output_schema or {},
         tags=tags or [],
-        negotiable=bool(negotiable),
+        negotiable=negotiable,
         semantics=dict(semantics or {}),
         evidence=dict(evidence or {}),
         cost=dict(cost or {}),
@@ -168,6 +204,17 @@ def validate_capability(cap: Any, *, index: int = 0) -> list[str]:
     data = cap.to_dict() if isinstance(cap, Capability) else cap
     if not isinstance(data, dict):
         return [f"capability[{index}] must be an object"]
+    # Capability.to_dict() omits empty Stage-0 fields; read the live object too
+    # so non-default values that are wrong-typed are still visible (H1).
+    if isinstance(cap, Capability):
+        data = {
+            **data,
+            "negotiable": cap.negotiable,
+            "semantics": cap.semantics,
+            "evidence": cap.evidence,
+            "cost": cap.cost,
+            "failure_modes": cap.failure_modes,
+        }
     errors = []
     if not data.get("name"):
         errors.append(f"capability[{index}] missing name")
@@ -176,11 +223,20 @@ def validate_capability(cap: Any, *, index: int = 0) -> list[str]:
     if data.get("kind") not in CAPABILITY_KINDS:
         errors.append(f"capability[{index}] invalid kind: {data.get('kind')!r} (allowed: {sorted(CAPABILITY_KINDS)})")
     name = data.get("name")
-    if name and data.get("kind", "tool") == "tool" and not _MCP_NAME.match(str(name)):
-        errors.append(
-            f"capability[{index}] tool name {name!r} is not MCP-safe "
-            "(letters, digits, _ - . only; max 128 chars)"
-        )
+    if name is not None and name != "":
+        name_s = str(name)
+        if "." in name_s:
+            # Registry uses '.' as product.tool separator; dotted names make
+            # find/find_all non-injective (review H2/F2).
+            errors.append(
+                f"capability[{index}] name {name_s!r} must not contain '.' "
+                "(reserved as the Registry product.tool separator)"
+            )
+        elif data.get("kind", "tool") == "tool" and not _MCP_NAME.match(name_s):
+            errors.append(
+                f"capability[{index}] tool name {name_s!r} is not MCP-safe "
+                "(letters, digits, _ - only; max 128 chars; no '.')"
+            )
     tags = data.get("tags")
     if tags is not None and (
         not isinstance(tags, list) or any(not isinstance(t, str) for t in tags)
@@ -196,7 +252,7 @@ def validate_capability(cap: Any, *, index: int = 0) -> list[str]:
                     f"capability[{index}] {schema_field} does not look like JSON Schema "
                     "(expected one of: type/$ref/properties/oneOf/anyOf/allOf/enum)"
                 )
-    # Stage-0 optional fields — validate shape only when present.
+    # Stage-0 contract fields — enforce vocabularies the package exports (H1/F1).
     if "negotiable" in data and data["negotiable"] is not None:
         if not isinstance(data["negotiable"], bool):
             errors.append(f"capability[{index}] negotiable must be a boolean")
@@ -205,21 +261,29 @@ def validate_capability(cap: Any, *, index: int = 0) -> list[str]:
             if not isinstance(data[obj_field], dict):
                 errors.append(f"capability[{index}] {obj_field} must be an object")
     cost = data.get("cost")
-    if isinstance(cost, dict) and "budget_class" in cost:
-        bc = cost.get("budget_class")
-        if bc is not None and str(bc) not in BUDGET_CLASSES:
-            errors.append(
-                f"capability[{index}] cost.budget_class must be one of "
-                f"{sorted(BUDGET_CLASSES)}, got {bc!r}"
-            )
+    if isinstance(cost, dict):
+        # Canonical key is budget_class; also accept budget (review probe name).
+        for key in ("budget_class", "budget"):
+            if key not in cost:
+                continue
+            bc = cost.get(key)
+            if bc is not None and str(bc) not in BUDGET_CLASSES:
+                errors.append(
+                    f"capability[{index}] cost.{key} must be one of "
+                    f"{sorted(BUDGET_CLASSES)}, got {bc!r}"
+                )
     evidence = data.get("evidence")
-    if isinstance(evidence, dict) and "confidence" in evidence:
-        conf = evidence.get("confidence")
-        if conf is not None and str(conf) not in CONFIDENCE_MODES:
-            errors.append(
-                f"capability[{index}] evidence.confidence must be one of "
-                f"{sorted(CONFIDENCE_MODES)}, got {conf!r}"
-            )
+    if isinstance(evidence, dict):
+        # Canonical key is confidence; also accept confidence_mode.
+        for key in ("confidence", "confidence_mode"):
+            if key not in evidence:
+                continue
+            conf = evidence.get(key)
+            if conf is not None and str(conf) not in CONFIDENCE_MODES:
+                errors.append(
+                    f"capability[{index}] evidence.{key} must be one of "
+                    f"{sorted(CONFIDENCE_MODES)}, got {conf!r}"
+                )
     modes = data.get("failure_modes")
     if modes is not None:
         if not isinstance(modes, list) or any(not isinstance(m, str) for m in modes):
@@ -235,6 +299,9 @@ def validate_manifest(man: Any) -> list[str]:
     errors = []
     if not data.get("product"):
         errors.append("manifest missing product")
+    version = data.get("version")
+    if version is None or (isinstance(version, str) and not version.strip()):
+        errors.append("manifest missing version")
     schema_version = data.get("schema_version")
     if not schema_version:
         errors.append("manifest missing schema_version")

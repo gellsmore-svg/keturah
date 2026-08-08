@@ -102,6 +102,13 @@ to MCP prompts/resources resources separately via `keturah.mcp.run_stdio_server`
 Manifest validation requires `schema_version` equal to
 `MANIFEST_SCHEMA_VERSION` so consumers can version-gate.
 
+## Review
+
+A point-in-time functional + code review of 0.4.0 is in
+[`docs/review-2026-08-08.md`](docs/review-2026-08-08.md); findings actioned in
+**0.5.0** (Stage 0 field validation, no `.` in capability names, MCP parse
+errors, `to_mcp` collision guard, `band_for` non-finite).
+
 ## Develop
 
 Works the same on native Linux and WSL — stdlib-only, no platform-specific steps.

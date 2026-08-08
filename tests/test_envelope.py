@@ -148,6 +148,10 @@ def test_band_thresholds_match_the_rest_of_the_estate():
     assert band_for(0.7) == "high" and band_for(0.699) == "medium"
     assert band_for(0.4) == "medium" and band_for(0.399) == "low"
     assert band_for(0.0) == "unassessed" and band_for(None) == "unassessed"
+    # Review L1: non-finite must not map to high
+    assert band_for(float("inf")) == "unassessed"
+    assert band_for(float("-inf")) == "unassessed"
+    assert band_for(float("nan")) == "unassessed"
 
 
 def test_validator_rejects_a_bad_band_and_unknown_dimension():

@@ -135,3 +135,21 @@ def test_unknown_tool_returns_error():
     err = responses[-1]
     assert "error" in err
     assert "not found" in err["error"]["message"].lower() or "Tool not found" in err["error"]["message"]
+
+
+def test_malformed_frames_return_jsonrpc_errors():
+    """Review M2: parse / invalid-request must not be silent."""
+    reg = _make_demo_manifest()
+    responses = _capture_stdio(
+        lambda: run_stdio_server(reg, handlers={"demo.echo": lambda **k: k}),
+        [
+            "{not json",
+            "42",
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+        ],
+    )
+    assert len(responses) == 3
+    assert responses[0]["error"]["code"] == -32700  # Parse error
+    assert responses[0]["id"] is None
+    assert responses[1]["error"]["code"] == -32600  # Invalid Request
+    assert responses[2]["id"] == 1 and "result" in responses[2]

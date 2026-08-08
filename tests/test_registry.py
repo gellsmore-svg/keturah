@@ -43,7 +43,8 @@ def test_registry_federates_resources_and_prompts():
     assert [(p, c.name) for p, c in reg.resources()] == [("tirzah", "docs"), ("deborah", "spec")]
     assert [(p, c.name) for p, c in reg.prompts()] == [("deborah", "review")]
     # resources/prompts stay out of the MCP tools projection
-    assert "spec" not in [t["name"] for t in reg.to_mcp(namespaced=False)["tools"]]
+    tool_names = [t["name"] for t in reg.to_mcp()["tools"]]
+    assert "spec" not in tool_names and not any(n.endswith(".spec") for n in tool_names)
 
 
 def test_registry_mcp_namespaces_tool_names():
@@ -52,9 +53,20 @@ def test_registry_mcp_namespaces_tool_names():
     # same tool name in two products stays unique once namespaced
     assert "tirzah.coherence_check" in names and "milcah.coherence_check" in names
     assert "tirzah.ask" in names
-    # un-namespaced view keeps raw names
-    raw = [t["name"] for t in reg.to_mcp(namespaced=False)["tools"]]
-    assert raw.count("coherence_check") == 2
+
+
+def test_to_mcp_unnamespaced_rejects_collisions():
+    """Review M1: MCP tools/list requires unique names."""
+    import pytest
+
+    reg = Registry([_tirzah(), _milcah()])
+    with pytest.raises(ValueError, match="duplicate MCP tool names"):
+        reg.to_mcp(namespaced=False)
+    # single product with unique raw names is fine
+    solo = Registry([_milcah()])
+    assert [t["name"] for t in solo.to_mcp(namespaced=False)["tools"]] == [
+        "coherence_check"
+    ]
 
 
 def test_empty_registry():
@@ -86,10 +98,14 @@ def test_find_all_accepts_namespaced_names():
     assert reg.find_all("nope.coherence_check") == []
 
 
-def test_namespace_parsing_does_not_break_dotted_capability_names():
-    """A capability whose own name contains a dot still resolves by that name."""
-    reg = Registry([manifest("tirzah", capabilities=[capability("memory.ask", "d")])])
-    assert reg.find("memory.ask")[0] == "tirzah"  # 'memory' is not a product
-    assert [p for p, _ in reg.find_all("memory.ask")] == ["tirzah"]
-    # and the fully-qualified form still works
-    assert [p for p, _ in reg.find_all("tirzah.memory.ask")] == ["tirzah"]
+def test_dotted_capability_names_are_rejected_by_validation():
+    """Review H2: '.' is the product.tool separator — not legal in cap names."""
+    from keturah import validate_capability, validate_manifest
+
+    cap = capability("memory_ask", "d")  # underscore is fine
+    assert validate_capability(cap) == []
+    bad = capability("memory.ask", "d")
+    errors = validate_capability(bad)
+    assert any("must not contain '.'" in e for e in errors)
+    man = manifest("tirzah", version="1.0.0", capabilities=[bad])
+    assert any("must not contain '.'" in e for e in validate_manifest(man))

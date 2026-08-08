@@ -88,9 +88,13 @@ def run_stdio_server(
         try:
             req = json.loads(line)
         except json.JSONDecodeError:
+            # JSON-RPC 2.0 §4.2: Parse error, id null (review M2).
+            _write_json(_error_response(None, -32700, "Parse error"))
             continue
 
         if not isinstance(req, dict):
+            # JSON-RPC 2.0 §4.2: Invalid Request (review M2).
+            _write_json(_error_response(None, -32600, "Invalid Request"))
             continue
 
         method = req.get("method")

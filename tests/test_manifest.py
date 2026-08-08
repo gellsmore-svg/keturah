@@ -143,8 +143,42 @@ def test_stage0_validation_rejects_bad_shapes():
     assert any("negotiable" in e for e in validate_capability(bad))
     bad2 = capability("t", "d", cost={"budget_class": "ultra"}).to_dict()
     assert any("budget_class" in e for e in validate_capability(bad2))
+    # Alias key used by review probe
+    bad2b = capability("t", "d", cost={"budget": "infinite"}).to_dict()
+    assert any("budget" in e for e in validate_capability(bad2b))
     bad3 = capability("t", "d", evidence={"confidence": "vibes"}).to_dict()
     assert any("evidence.confidence" in e for e in validate_capability(bad3))
+    bad3b = capability("t", "d", evidence={"confidence_mode": "vibes"}).to_dict()
+    assert any("confidence_mode" in e for e in validate_capability(bad3b))
     bad4 = capability("t", "d").to_dict()
     bad4["failure_modes"] = [1]
     assert any("failure_modes" in e for e in validate_capability(bad4))
+    bad5 = capability("t", "d").to_dict()
+    bad5["failure_modes"] = "times out"
+    assert any("failure_modes" in e for e in validate_capability(bad5))
+
+
+def test_capability_builder_rejects_wrong_types():
+    """Review H1/M3: no silent bool()/list() coercion of bad Stage-0 values."""
+    import pytest
+
+    with pytest.raises(TypeError, match="negotiable"):
+        capability("t", "d", negotiable="yes")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="semantics"):
+        capability("t", "d", semantics="freeform")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="failure_modes"):
+        capability("t", "d", failure_modes="times out")  # type: ignore[arg-type]
+
+
+def test_manifest_rejects_empty_version():
+    """Review M4: product version is part of consumer version-gating."""
+    man = manifest("p", version="", capabilities=[capability("t", "d")]).to_dict()
+    assert any("missing version" in e for e in validate_manifest(man))
+    man["version"] = "1.0.0"
+    assert validate_manifest(man) == []
+
+
+def test_capability_name_rejects_dot_separator():
+    """Review H2: capability names must not contain the Registry separator."""
+    errors = validate_capability(capability("a.b", "d"))
+    assert any("must not contain '.'" in e for e in errors)

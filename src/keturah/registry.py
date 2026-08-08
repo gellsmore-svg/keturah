@@ -98,6 +98,10 @@ class Registry:
 
         With ``namespaced`` (default), tool names become ``product.tool`` so two
         products exposing the same tool name don't collide.
+
+        ``namespaced=False`` raises :class:`ValueError` when the emission would
+        contain duplicate tool names — MCP requires unique names in
+        ``tools/list`` (review M1).
         """
         tools = []
         for product, cap in self.tools():
@@ -105,4 +109,13 @@ class Registry:
             if namespaced:
                 tool = {**tool, "name": f"{product}.{cap.name}"}
             tools.append(tool)
+        if not namespaced:
+            names = [t.get("name") for t in tools]
+            dupes = sorted({n for n in names if n and names.count(n) > 1})
+            if dupes:
+                raise ValueError(
+                    "to_mcp(namespaced=False) would emit duplicate MCP tool "
+                    f"names {dupes}; use namespaced=True (default) or resolve "
+                    "the collision before projecting"
+                )
         return {"tools": tools}

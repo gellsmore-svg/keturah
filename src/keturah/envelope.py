@@ -23,6 +23,7 @@ so no producer has to change first.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -55,10 +56,16 @@ _BAND_THRESHOLDS: tuple[tuple[float, str], ...] = ((0.7, "high"), (0.4, "medium"
 
 
 def band_for(value: Any) -> str:
-    """Map a scalar confidence in [0, 1] onto an ordinal band."""
+    """Map a scalar confidence in [0, 1] onto an ordinal band.
+
+    Non-finite values (``nan``, ``±inf``) map to ``unassessed`` explicitly —
+    ``inf`` must not read as ``high`` (review L1).
+    """
     try:
         v = float(value)
     except (TypeError, ValueError):
+        return "unassessed"
+    if not math.isfinite(v):
         return "unassessed"
     for threshold, band in _BAND_THRESHOLDS:
         if v >= threshold:

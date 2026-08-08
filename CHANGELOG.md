@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-08
+
+Review action for `docs/review-2026-08-08.md` (0.4.0 baseline).
+
+### Fixed
+- **H1 / F1**: Stage 0 fields fully enforced — `negotiable` bool, `cost.budget` /
+  `cost.budget_class` ∈ `BUDGET_CLASSES`, `evidence.confidence` /
+  `evidence.confidence_mode` ∈ `CONFIDENCE_MODES`, `failure_modes` list of
+  strings. `capability()` raises `TypeError` on wrong types instead of
+  silently coercing (`bool("yes")`, `list("times out")`).
+- **H2 / F2**: capability names may not contain `.` (Registry `product.tool`
+  separator).
+- **M1**: `Registry.to_mcp(namespaced=False)` raises on duplicate tool names.
+- **M2**: stdio MCP emits JSON-RPC `-32700` / `-32600` for malformed frames
+  instead of silence.
+- **M3**: wrong-typed `semantics` / related builder args name the field.
+- **M4**: empty product `version` fails `validate_manifest`.
+- **L1**: `band_for` maps non-finite values (`nan`, `±inf`) to `unassessed`.
+
 ## [0.4.0] — 2026-08-07
 
 ### Added
