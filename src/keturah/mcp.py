@@ -62,7 +62,7 @@ def run_stdio_server(
     *,
     handlers: Mapping[str, Callable[..., Any]] | None = None,
     server_name: str = "keturah-mcp",
-    server_version: str = "0.1.0",
+    server_version: str | None = None,
 ) -> None:
     """Run a blocking stdio MCP server.
 
@@ -79,6 +79,13 @@ def run_stdio_server(
     local stdio MCP clients. For production use, wrap in a small process manager.
     """
     handlers = dict(handlers or {})
+    if server_version is None:
+        try:
+            from importlib.metadata import version as _pkg_version
+
+            server_version = _pkg_version("keturah")
+        except Exception:
+            server_version = "0.0.0+local"
 
     for raw_line in sys.stdin:
         line = raw_line.strip()
@@ -265,6 +272,12 @@ def main(argv: list[str] | None = None) -> None:
             # with proper dependency injection (config, db, adapters).
 
         except Exception:
+            if not args.demo:
+                print(
+                    "keturah-mcp: family registry not importable; starting the demo "
+                    "echo server. Pass --demo to silence this, or pipx inject tirzah.",
+                    file=sys.stderr,
+                )
             reg = None  # fall through to demo
 
     if args.demo or reg is None:

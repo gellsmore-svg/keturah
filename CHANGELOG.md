@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-08-21
+
+### Fixed
+- MCP ``server_version`` comes from the installed package, not the literal
+  ``0.1.0``. Starting without a family registry prints a stderr banner before
+  the demo echo server.
+
 ## [0.5.0] — 2026-08-08
 
 Review action for `docs/review-2026-08-08.md` (0.4.0 baseline).
