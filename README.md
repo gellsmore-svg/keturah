@@ -1,24 +1,42 @@
 # Keturah
 
-**A uniform, MCP-bridgeable manifest of a product's LLM-consumable interfaces.**
+**Keturah describes what an LLM can call in your product, once, in a form
+that is also MCP.** Each interface is a `Capability` (name, description,
+JSON-Schema input and output); a `Manifest` bundles a product's capabilities
+with its name and version; a `Registry` lets agents discover capabilities
+across many products. `to_mcp()` turns any of them into the Model Context
+Protocol `tools/list` shape, so an MCP server becomes a thin adapter over the
+manifest rather than a second definition that can drift.
 
-Keturah lets any family product — library *or* service — answer one question:
-*what can an LLM call here, and how?* Each interface is a `Capability` (name,
-description, JSON-Schema input/output); a `Manifest` bundles them with the product
-and version. The name is biblical ("incense / that which is offered up") — the
-catalog of what each product **offers**.
+It is pure stdlib with no dependencies. The name means "incense, that which is
+offered up": the catalogue of what each product **offers**.
 
-There is already a standard for this — **Model Context Protocol (MCP)** — and
-Keturah does not replace it. `Manifest.to_mcp()` projects a manifest onto MCP's
-`tools/list` shape, so a real MCP server is a thin adapter over a Keturah manifest
-rather than a parallel definition. Keturah exists because the family is a mix of
-libraries and services, and because manifests should be **built from the seam
-contracts a product already enforces** (Deborah's plan schema, Milcah's
-specialist request/result, Mahalath's match, Galeed's events) so the manifest and
-the contract never drift.
+## Is it for you?
+
+**Good fit:** you have several libraries or services, not just MCP servers,
+and want one description of their LLM-callable interfaces that drives
+discovery, validation and MCP from the same source. In this family the
+manifests are built from contracts each product already enforces (Deborah's
+plan schema, Milcah's specialist request and result, Galeed's events).
+
+**Not a fit:** you only need a single MCP server. Use an MCP SDK directly.
+Keturah's own server is minimal and implements tools only (see below).
+
+## Try it
+
+```bash
+pip install keturah
+keturah-mcp --demo        # a stdio MCP server with two demo tools
+```
+
+Register it with an MCP client, for example
+`claude mcp add keturah -- keturah-mcp --demo`, and the client can list and
+call `demo.echo`.
+
+Describe your own product:
 
 ```python
-from keturah import manifest, capability, Registry, MANIFEST_SCHEMA_VERSION
+from keturah import manifest, capability, Registry
 
 m = manifest(
     "tirzah",
@@ -27,92 +45,80 @@ m = manifest(
         capability(
             "ask",
             "Answer a question over Tirzah's memory.",
-            input_schema={
-                "type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"],
-            },
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {"type": "string"},
-                    "traceId": {"type": "string"},
-                },
-            },
+            input_schema={"type": "object",
+                          "properties": {"query": {"type": "string"}},
+                          "required": ["query"]},
+            output_schema={"type": "object",
+                           "properties": {"answer": {"type": "string"}}},
             tags=["qa", "memory"],
         ),
-        capability(
-            "capabilities",
-            "List this product's interfaces.",
-            kind="resource",
-            tags=["discovery"],
-        ),
-        capability(
-            "system_prompt",
-            "Default system prompt for agents using this product.",
-            kind="prompt",
-        ),
+        capability("system_prompt", "Default system prompt for agents.", kind="prompt"),
     ],
 )
 
-m.schema_version          # MANIFEST_SCHEMA_VERSION ("1.0")
-m.to_dict()               # full manifest (descriptions + schemas)
-m.to_mcp()                # MCP tools/list — tools only; includes outputSchema
-m.resources()             # kind="resource" capabilities
-m.prompts()               # kind="prompt" capabilities
+m.to_dict()        # the full manifest, with descriptions and schemas
+m.to_mcp()         # MCP tools/list: tools only, including outputSchema
+m.prompts()        # kind="prompt" capabilities (also: m.resources())
 ```
 
-A product typically exposes this as `capabilities()` and, where it is a service, a
-`GET /api/capabilities` endpoint (with `?format=mcp` for the MCP view).
+A product usually exposes this as `capabilities()` and, if it is a service, as
+`GET /api/capabilities` (`?format=mcp` for the MCP view).
 
-## Registry (federated discovery)
+## Discovery across products
 
 ```python
-reg = Registry([m, other_product_manifest])
+reg = Registry([m, other_manifest])
 
-reg.find("ask")                    # first (product, capability) match
-reg.find("tirzah.ask")             # namespaced — same form to_mcp() emits
-reg.find("ask", product="tirzah")  # explicit product wins
-reg.find_all("ask")                # every product exposing that tool name
-
-reg.tools()                        # all kind="tool"
-reg.resources()                    # all kind="resource"
-reg.prompts()                      # all kind="prompt"
-reg.with_tag("planner")
-
-reg.to_mcp()                       # union tools/list; names are product.tool
+reg.find("tirzah.ask")             # namespaced, the form to_mcp() emits
+reg.find("ask", product="tirzah")  # or by explicit product
+reg.find_all("ask")                # every product exposing that name
+reg.with_tag("planner")            # also: tools(), resources(), prompts()
+reg.to_mcp()                       # union tools/list, named product.tool
 ```
 
-## MCP projection
+## Mapping to MCP
 
-`Capability.to_mcp_tool()` / `Manifest.to_mcp()` / `Registry.to_mcp()` emit the
-MCP `tools/list` shape:
-
-| Keturah field | MCP field |
+| Keturah | MCP `tools/list` |
 |---|---|
-| `name` | `name` (Registry namespaces as `product.tool`) |
+| `name` | `name` (a Registry emits `product.tool`) |
 | `description` | `description` |
 | `input_schema` | `inputSchema` |
 | `output_schema` | `outputSchema` (omitted when unset) |
 
-Only `kind="tool"` entries appear in `to_mcp()`. Resources and prompts stay on
-the Keturah surface (`resources()` / `prompts()`); a real MCP server can map them
-to MCP prompts/resources resources separately via `keturah.mcp.run_stdio_server`.
+Only `kind="tool"` capabilities are projected. Resources and prompts stay on
+the Keturah surface (`resources()` / `prompts()`).
 
-Manifest validation requires `schema_version` equal to
-`MANIFEST_SCHEMA_VERSION` so consumers can version-gate.
+## Serving over MCP
 
-## Review
+`keturah.mcp.run_stdio_server(registry, handlers={...})` runs a minimal,
+synchronous stdio MCP server. It implements `initialize`, `tools/list` and
+`tools/call`. It lists only tools that have a handler, and does not serve MCP
+resources or prompts.
 
-A point-in-time functional + code review of 0.4.0 is in
-[`docs/review-2026-08-08.md`](docs/review-2026-08-08.md); findings actioned in
-**0.5.0** (Stage 0 field validation, no `.` in capability names, MCP parse
-errors, `to_mcp` collision guard, `band_for` non-finite).
+`keturah-mcp` with no flags serves the family registry from an installed
+Tirzah, with whichever handlers Tirzah and Hanani provide; `--demo` needs
+nothing installed.
+
+## Calling a capability: the envelope
+
+`keturah.envelope` defines the shape of one call and its result:
+`SpecialistRequest`, `SpecialistResult`, `Confidence` and `Evidence`, with
+`validate_request` / `validate_result`. Evidence has a `kind` and a `ref`, so a
+validator can check that it points at something. `normalise_evidence` upgrades
+older free-text evidence lists, so existing producers keep working.
+
+## Versioning
+
+Manifests carry `schema_version`, and validation requires it to equal
+`MANIFEST_SCHEMA_VERSION` (currently `"1.0"`), so consumers can version-gate.
 
 ## Develop
 
-Works the same on native Linux and WSL — stdlib-only, no platform-specific steps.
+Stdlib-only, so it behaves the same on Linux and WSL.
 
 ```bash
 pip install -e ".[dev]" && pytest
 ```
+
+[CHANGELOG](CHANGELOG.md) · [2026-08-08 review](docs/review-2026-08-08.md) ·
+Apache 2.0, see [LICENSE](LICENSE).
